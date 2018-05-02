@@ -15,7 +15,7 @@
 #define JOY_THRESHOLD 1
 
 #define PWM_LOW_LIMIT 50  // low limit of PWM
-#define PWM_LIMIT 128  // limit for PWM of engine (0-255)
+#define PWM_LIMIT 255  // limit for PWM of engine (0-255)
 
 struct JOY {
   uint16_t y_middle;
@@ -28,6 +28,8 @@ JOY joy_eng = {.y_middle = 528, .x_middle=512, .zero = 0, .maximum = 1023};
 
 RF24 radio(NRF_CE, NRF_CS);
 uint8_t address[][6] = {"1Node","2Node","3Node","4Node","5Node","6Node"};
+
+const uint8_t delay_ms = 1000 / 50;
 
 void setup() {
   Serial.begin(BAUDRATE); //открываем порт для связи с ПК
@@ -75,13 +77,15 @@ void loop() {
   snprintf(t, 100, "stear: %i, eng_dir: %i, eng_pwm: %i", stearing_val, eng_direction, eng_pwm);
   Serial.println(t);
 
+  // payload
   uint8_t payload[NRF_PAYLOAD_SIZE];
   payload[0] = 1;  // move command
   payload[1] = stearing_val;
   payload[2] = eng_direction;
   payload[3] = eng_pwm;
+  payload[7] = delay_ms;
   
   radio.write(payload, sizeof(payload));
   
-  delay(20);  // 50 Hz
+  delay(delay_ms);  // 50 Hz
 }

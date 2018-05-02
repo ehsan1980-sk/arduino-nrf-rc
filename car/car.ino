@@ -16,9 +16,10 @@
 #define BCWD_PIN 4
 #define STEARING_SERVO_PIN 5
 
-#define LEFT 1135  // 57
-#define RIGTH 1565  // 103
-#define ZERO 1398
+#define ZERO 1375
+#define LEFT ZERO - 320
+#define RIGTH ZERO + 320
+
 
 RF24 radio(NRF_CE, NRF_CS);
 uint8_t address[][6] = {"1Node","2Node","3Node","4Node","5Node","6Node"};
@@ -26,13 +27,15 @@ uint8_t pipeNo;
 
 uint8_t payload[NRF_PAYLOAD_SIZE];
 
-ServoTimer2 myservo;  // create servo object to control a servo
+ServoTimer2 stearing_servo;  // create servo object to control stearing
 
 int8_t eng_direction;  // 1 - fwd, 2 - bcwrd, 0 - none
 uint8_t eng_pwm;      // pwm for engine
 uint16_t p_stearing_val = 0;
-uint16_t stearing_servo_val;
+uint16_t stearing_servo_val;  // stearing servo timing
 
+uint8_t delay_ms = 20;  // delay between commands from controller
+long int recieve_package_time = millis();  // last command recieved time
 
 void setup() {
   Serial.begin(BAUDRATE);
@@ -60,19 +63,22 @@ void setup() {
   pinMode(BCWD_PIN, OUTPUT);
 
   // stearing servo
-  myservo.attach(STEARING_SERVO_PIN);  // attaches the servo on pin 9 to the servo object
+  stearing_servo.attach(STEARING_SERVO_PIN);
+  stearing_servo.write(ZERO); 
 }
 
-void loop() { 
+void loop() {  
   while (radio.available(&pipeNo)){
+    recieve_package_time = millis();
     radio.read(&payload, sizeof(payload));
 
     uint8_t command = payload[0];
+    delay_ms = payload[7];
 
     switch (command) {
       // move command
       case 1:
-        stearing_servo_val = map(payload[1], 0, 255, LEFT, RIGTH);
+        stearing_servo_val = map(payload[1], 0, 255, LEFT, RIGTH);  // map 0 - 255 to servo timing
         eng_direction = payload[2];  // fixme
         eng_pwm = payload[3];
 
@@ -81,7 +87,7 @@ void loop() {
 
     // strearing
     if (abs(stearing_servo_val - p_stearing_val) > 1) {  
-       myservo.write(stearing_servo_val);                  // sets the servo position according to the scaled value
+       stearing_servo.write(stearing_servo_val);  // sets the servo position according to the scaled value
     }
     p_stearing_val = stearing_servo_val;
 
@@ -110,10 +116,18 @@ void loop() {
 
     // send debug info
     char t[100];
-    snprintf(t, 100, "msg: %d_%d_%d_%d", command, stearing_servo_val, eng_direction, eng_pwm);
-    // Serial.println(t);
     snprintf(t, 100, "eng_pwm: %i, eng_dir: %i, stear: %i", eng_pwm, eng_direction, stearing_servo_val);
     Serial.println(t);
-      
-  }  
+  }
+  
+  // in case of lose connection
+  if ((millis() - recieve_package_time) > delay_ms) {
+    Serial.println("Reset state");
+
+    digitalWrite(FWD_PIN, LOW);
+    digitalWrite(BCWD_PIN, LOW);
+    stearing_servo.write(ZERO);
+    
+    delay(delay_ms);  // wait some time...
+  }
 }
