@@ -11,7 +11,7 @@
 #define NRF_CHAN 0x60
 #define NRF_PAYLOAD_SIZE 32
 
-#define ENG_PWM_PIN 2
+#define ENG_PWM_PIN 6
 #define FWD_PIN 3
 #define BCWD_PIN 4
 #define STEARING_SERVO_PIN 5

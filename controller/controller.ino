@@ -1,8 +1,6 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 
-#include <kalman.h>
-
 #define BAUDRATE 9600
 
 #define NRF_CE 9
@@ -15,6 +13,8 @@
 #define JOY_STEARING_PIN 1
 
 #define JOY_THRESHOLD 1
+
+#define PWM_LOW_LIMIT 50  // low limit of PWM
 #define PWM_LIMIT 128  // limit for PWM of engine (0-255)
 
 struct JOY {
@@ -25,9 +25,6 @@ struct JOY {
 };
 
 JOY joy_eng = {.y_middle = 528, .x_middle=512, .zero = 0, .maximum = 1023};
-// JOY joy_stear = {.y_middle = 528, .x_middle=512, .zero = 0, .maximum = 1023};
-
-kalman_t filtered_k = {.varVolt = 1.5, .varProcess = 0.15, .P = 1.0};
 
 RF24 radio(NRF_CE, NRF_CS);
 uint8_t address[][6] = {"1Node","2Node","3Node","4Node","5Node","6Node"};
@@ -59,20 +56,19 @@ void loop() {
   uint8_t eng_pwm = 0;      // pwm for engine
 
   uint16_t stearing_read = analogRead(JOY_STEARING_PIN);
-  uint16_t fstearing_read = (int) kalman_filter(&filtered_k, stearing_read);
-  uint8_t stearing_val = map(fstearing_read, 0, 1023, 0, 255);
+  uint8_t stearing_val = map(stearing_read, 0, 1023, 0, 255);
 
   uint16_t acc_read = analogRead(JOY_ENG_PIN);  // acceleration control
 
   // forward
   if (acc_read > (joy_eng.y_middle + JOY_THRESHOLD)) {
     eng_direction = 1;
-    eng_pwm = map(acc_read, joy_eng.y_middle, joy_eng.maximum, 0, PWM_LIMIT);
+    eng_pwm = map(acc_read, joy_eng.y_middle, joy_eng.maximum, PWM_LOW_LIMIT, PWM_LIMIT);
   }
   // backward
   else if (acc_read < (joy_eng.y_middle - JOY_THRESHOLD)) {
     eng_direction = 2;
-    eng_pwm = map(acc_read, joy_eng.y_middle, 0, 0, PWM_LIMIT);
+    eng_pwm = map(acc_read, joy_eng.y_middle, 0, PWM_LOW_LIMIT, PWM_LIMIT);
   }
 
   char t[100];
