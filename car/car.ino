@@ -17,8 +17,8 @@
 #define STEARING_SERVO_PIN 5
 
 #define ZERO 1375
-#define LEFT ZERO - 320
-#define RIGTH ZERO + 320
+#define RIGTH ZERO - 350
+#define LEFT ZERO + 350
 
 
 RF24 radio(NRF_CE, NRF_CS);
@@ -64,7 +64,12 @@ void setup() {
 
   // stearing servo
   stearing_servo.attach(STEARING_SERVO_PIN);
-  stearing_servo.write(ZERO); 
+  stearing_servo.write(ZERO);
+  delay(100);
+  stearing_servo.write(RIGTH);
+  delay(100);
+  stearing_servo.write(ZERO);
+  
 }
 
 void loop() {  

@@ -29,7 +29,9 @@ JOY joy_eng = {.y_middle = 528, .x_middle=512, .zero = 0, .maximum = 1023};
 RF24 radio(NRF_CE, NRF_CS);
 uint8_t address[][6] = {"1Node","2Node","3Node","4Node","5Node","6Node"};
 
-const uint8_t delay_ms = 1000 / 50;
+const uint8_t delay_ms = 1000 / 200;
+
+uint64_t time_from_last_command = 0;  // ms from last command
 
 void setup() {
   Serial.begin(BAUDRATE); //открываем порт для связи с ПК
@@ -54,6 +56,8 @@ void setup() {
 }
 
 void loop() {
+  time_from_last_command = millis();
+  
   int8_t eng_direction = 0;  // 1 - fwd, 2 - bcwrd, 0 - none
   uint8_t eng_pwm = 0;      // pwm for engine
 
@@ -86,6 +90,8 @@ void loop() {
   payload[7] = delay_ms;
   
   radio.write(payload, sizeof(payload));
-  
-  delay(delay_ms);  // 50 Hz
+
+  while ((millis() - time_from_last_command) < delay_ms) {
+    delay(0);  // sleep 1ms
+  }
 }
