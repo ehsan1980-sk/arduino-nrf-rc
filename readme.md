@@ -1,10 +1,11 @@
-## Arduino + NRF24 RC Car
+## Arduino + NRF24 RC Car and Controller
 ### Components
-2 * NRF24L01
-2 * Arduino Nano
-1 * L298 H-bridge
-1 * SG90 servo for steering
-2 * Dual-axis joystick (KY-023)
+
+    2 * NRF24L01
+    2 * Arduino Nano
+    1 * L298 H-bridge
+    1 * SG90 servo for steering
+    2 * Dual-axis joystick (KY-023)
 
 ### NRF + Arduino connection
 For both Arduino and NRF used the same connections:
@@ -15,13 +16,13 @@ For both Arduino and NRF used the same connections:
     SCK -> D13
     MSK -> D12
 
-### Transmitter connections
+### Controller connections
 NRF setup + joysticks
 
     Engine potentiometer to A0
     Wheel control potentiometer to A1
 
-### Receiver connections
+### Receiver (RC car) connections
 Same NRF setup + L298(pwm to `enable <chanel>`, directions to in<n>, in<n+1>)
 
     Engine PWM -> D6
@@ -47,7 +48,8 @@ Command format (\[\] - one byte):
     [1][<steering angle>][<eng_direction>][<eng_pwm>][3 empty bytes][20 <ms>][24 empty bytes]
 
 ### todo
-[x] Basic car and controller code
-[ ] Response payload to commands
-[ ] LCD display on the controller board to show feedback
-[ ] 3d model for controller board
+
+- [x] Basic car and controller code
+- [ ] Response payload to commands
+- [ ] LCD display on the controller board to show feedback
+- [ ] 3d model for controller board
