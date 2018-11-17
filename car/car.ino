@@ -1,27 +1,13 @@
 #include "nRF24L01.h"
 #include "RF24.h"
-
 #include <ServoTimer2.h>
+
 
 #define BAUDRATE 115200
 
-// NRF24 pins
-#define NRF_CE 9
-#define NRF_CS 10
-#define NRF_ADDR 0
-#define NRF_CHAN 0x60
-#define NRF_PAYLOAD_SIZE 32
-
-// L298 and steering servo pins
-#define ENG_PWM_PIN 6
-#define FWD_PIN 3
-#define BCWD_PIN 4
-#define STEERING_SERVO_PIN 5
-
-// Steerings params
-#define ZERO 1325
-#define RIGTH ZERO - 350
-#define LEFT ZERO + 350
+// Radio Commands
+#define CMD_NONE 1
+#define CMD_ACTIVE 2
 
 // Engine mode control params
 #define FREE 0
@@ -29,26 +15,52 @@
 #define BACKWARD 2
 #define BRAKE 3
 
-// Commands
-#define CMD_NONE 0
-#define CMD_MOVE 1
-#define CMD_BRAKE 2
+
+// NRF24 pins
+#define NRF_CE 3
+#define NRF_CS 10
+
+// NRF24 settings
+#define NRF_ADDR 0
+#define NRF_CHAN 0x60
+#define NRF_PAYLOAD_SIZE 32
+
+// L298 or MX1508 driver pins
+#define ENG_PWM_PIN -1  // -1 is MX1508 driver
+#define FWD_PIN 9
+#define BCWD_PIN 6
+
+// Steering servo pin
+#define STEERING_SERVO_PIN 5
+
+// Steerings params
+#define ZERO 1390
+#define RIGTH ZERO - 280
+#define LEFT ZERO + 280
+
+// Engine PWM controls
+#define PWM_LOW_LIMIT 50  // low limit of PWM
+#define PWM_LIMIT 255     // limit for PWM of engine (0-255)
 
 
 RF24 radio(NRF_CE, NRF_CS);
 uint8_t address[][6] = {"1Node","2Node","3Node","4Node","5Node","6Node"};
 uint8_t pipeNo;
 
-uint8_t payload[NRF_PAYLOAD_SIZE];
+struct payload_t {
+  uint8_t command;
+  uint16_t stick1_x;
+  uint16_t stick1_y;
+  bool stick1_p;
+  uint16_t stick2_x;
+  uint16_t stick2_y;
+  bool stick2_p;
+  uint8_t delay_ms;
+} p;
+
+long int recieve_package_time = millis();  // last command recieved time
 
 ServoTimer2 steering_servo;  // create servo object to control stearing
-
-int8_t eng_direction;  // 1 - fwd, 2 - bcwrd, 0 - none
-uint8_t eng_pwm;      // pwm for engine
-uint16_t steering_servo_val;  // stearing servo timing
-
-uint8_t delay_ms = 20;  // delay between commands from controller
-long int recieve_package_time = millis();  // last command recieved time
 
 
 /* 
@@ -57,12 +69,23 @@ long int recieve_package_time = millis();  // last command recieved time
 */
 void set_steering(uint16_t timing) {
     static uint16_t p_timing = 0;
-
-    if (abs(timing - p_timing) > 1) {  
+    
+    if (abs(timing - p_timing) > 0) {  
       steering_servo.write(timing);  // sets the servo position according to the scaled value
     }
+
     p_timing = timing;
 }
+
+
+void set_engine(uint8_t eng_direction, uint8_t eng_pwm) {
+    if (ENG_PWM_PIN == -1) {
+        set_MX1508_engine(eng_direction, eng_pwm);
+    } else {
+        set_L298_engine(eng_direction, eng_pwm);
+    }
+}
+
 
 /*
  * Set engine state for L298. Control both direction and PWM.
@@ -73,7 +96,7 @@ void set_steering(uint16_t timing) {
  * FREE - disconnect engine from circuit
  * BRAKE - short engine terminals
  */
-void set_engine(uint8_t eng_direction, uint8_t eng_pwm) {
+void set_L298_engine(uint8_t eng_direction, uint8_t eng_pwm) {
    switch (eng_direction) {
       case FREE:
         // set both INs to same (low or high) AND enable to low;
@@ -103,20 +126,57 @@ void set_engine(uint8_t eng_direction, uint8_t eng_pwm) {
     analogWrite(ENG_PWM_PIN, eng_pwm);  // send PWM signal to engine
 };
 
+
+void set_MX1508_engine(uint8_t eng_direction, uint8_t eng_pwm) {
+    switch (eng_direction) {
+      case FREE:
+        digitalWrite(FWD_PIN, LOW);
+        digitalWrite(BCWD_PIN, LOW);
+        break;
+
+      case FORWARD:
+        analogWrite(FWD_PIN, eng_pwm);
+        digitalWrite(BCWD_PIN, LOW);
+        break;
+
+      case BACKWARD:
+        digitalWrite(FWD_PIN, LOW);
+        analogWrite(BCWD_PIN, eng_pwm);
+        break;
+
+      case BRAKE:
+        digitalWrite(FWD_PIN, HIGH);
+        digitalWrite(BCWD_PIN, HIGH);
+        break;
+    }
+}
+
+
+void debug(uint8_t eng_direction, uint8_t eng_pwm, uint16_t steering_servo_value) {
+  char t[100];
+  snprintf(t, 100, "car. eng_direction: %i, eng_pwm: %i, steering: %i", 
+                    eng_direction, eng_pwm, steering_servo_value);
+  Serial.println(t);
+}
+
+
 /*
  * Simple greeting to determine car status.
  */
 void hello() {
-  set_steering(ZERO);
+  set_steering(LEFT);
   delay(100);
   set_steering(RIGTH);
   delay(100);
   set_steering(ZERO);
 };
 
+
 void setup() {
   Serial.begin(BAUDRATE);
   while (!Serial) {}
+
+  Serial.println("setup start");
 
   // radio setup
   radio.begin();
@@ -135,62 +195,65 @@ void setup() {
   radio.startListening();  // listen
 
   // pins setup
-  pinMode(ENG_PWM_PIN, OUTPUT);
+  if (ENG_PWM_PIN != -1) pinMode(ENG_PWM_PIN, OUTPUT);
+
   pinMode(FWD_PIN, OUTPUT);
   pinMode(BCWD_PIN, OUTPUT);
 
-  // stearing servo
+  // steering servo
   steering_servo.attach(STEERING_SERVO_PIN);
 
   hello();  
+
+  Serial.println("setup end");
 }
 
-void loop() {  
+
+void loop() {
   while (radio.available(&pipeNo)){
     recieve_package_time = millis();
-    radio.read(&payload, sizeof(payload));
+    radio.read(&p, sizeof(payload_t));
 
-    uint8_t command = payload[0];
-    steering_servo_val = map(payload[1], 0, 255, LEFT, RIGTH);  // map 0 - 255 to servo timing
-    delay_ms = payload[7];
+    // steering
+    uint16_t steering_servo_value = map(p.stick2_x, 0, 1023, LEFT, RIGTH);  // map 0 - 1023 to servo timing
+    set_steering(steering_servo_value);
 
-    switch (command) {
+    switch (p.command) {
       case CMD_NONE:
         set_engine(FREE, 0);
         break;
 
-      case CMD_MOVE:
-        eng_direction = payload[2];
-        eng_pwm = payload[3];
-    
-        // engine
+      case CMD_ACTIVE:
+        int8_t eng_direction = FREE;
+        uint8_t eng_pwm = 0;
+
+        if (p.stick1_p) {
+          eng_direction = BRAKE; 
+        } else {
+          if (p.stick1_y > 512) {
+            eng_direction = FORWARD;
+            eng_pwm = map(p.stick1_y, 512, 1023, PWM_LOW_LIMIT, PWM_LIMIT);
+          }
+          else if (p.stick1_y < 512) {
+            eng_direction = BACKWARD;
+            eng_pwm = map(p.stick1_y, 512, 0, PWM_LOW_LIMIT, PWM_LIMIT);
+          }  
+        }
+
+        debug(eng_direction, eng_pwm, steering_servo_value);
         set_engine(eng_direction, eng_pwm);
 
         break;
-
-      case CMD_BRAKE:
-        set_engine(BRAKE, 255);
-
-        break;
     }
-
-    // streering
-    set_steering(steering_servo_val);
-
-    // send debug info
-    char t[100];
-    snprintf(t, 100, "eng_pwm: %i, eng_dir: %i, stear: %i", eng_pwm, eng_direction, steering_servo_val);
-    Serial.println(t);
   }
+
   
   // in case of lose connection
-  if ((millis() - recieve_package_time) > delay_ms * 5) {
+  if ((millis() - recieve_package_time) > p.delay_ms * 5) {
     Serial.println("Reset state");
 
     set_engine(BRAKE, 0);  // brake by engine
-    
     set_steering(ZERO);  // set steering to center point
-    
-    delay(delay_ms);  // wait some time...
+    delay(p.delay_ms);  // wait some time...
   }
 }
