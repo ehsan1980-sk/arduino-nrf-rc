@@ -35,8 +35,8 @@
 
 // Steerings params
 #define ZERO 1390
-#define RIGTH ZERO - 280
-#define LEFT ZERO + 280
+#define RIGTH ZERO - 320
+#define LEFT ZERO + 300
 
 // Engine PWM controls
 #define PWM_LOW_LIMIT 50  // low limit of PWM
@@ -164,22 +164,41 @@ void debug(uint8_t eng_direction, uint8_t eng_pwm, uint16_t steering_servo_value
  * Simple greeting to determine car status.
  */
 void hello() {
-  set_steering(LEFT);
-  delay(100);
-  set_steering(RIGTH);
-  delay(100);
   set_steering(ZERO);
+  analogWrite(FWD_PIN, 20);
+  delay(400);
+
+//  set_steering(LEFT);
+  analogWrite(FWD_PIN, 0);
+  analogWrite(BCWD_PIN, 20);
+  delay(400);
+
+//  set_steering(RIGTH);
+  analogWrite(BCWD_PIN, 0);
+  analogWrite(FWD_PIN, 20);
+  delay(400);
+
+//  set_steering(ZERO);
+  analogWrite(FWD_PIN, 0);
 };
 
 
 void setup() {
+  // pins setup
+  if (ENG_PWM_PIN != -1) pinMode(ENG_PWM_PIN, OUTPUT);
+  pinMode(FWD_PIN, OUTPUT);
+  pinMode(BCWD_PIN, OUTPUT);
+  pinMode(STEERING_SERVO_PIN, OUTPUT);
+
   Serial.begin(BAUDRATE);
+  radio.begin();
+  steering_servo.attach(STEERING_SERVO_PIN);
+  
+  hello();
+  
   while (!Serial) {}
 
-  Serial.println("setup start");
-
   // radio setup
-  radio.begin();
   radio.setAutoAck(1);
   radio.setRetries(0, 15);  // delay, count of retry
 
@@ -194,25 +213,20 @@ void setup() {
   radio.powerUp();
   radio.startListening();  // listen
 
-  // pins setup
-  if (ENG_PWM_PIN != -1) pinMode(ENG_PWM_PIN, OUTPUT);
-
-  pinMode(FWD_PIN, OUTPUT);
-  pinMode(BCWD_PIN, OUTPUT);
-
-  // steering servo
-  steering_servo.attach(STEERING_SERVO_PIN);
-
-  hello();  
-
-  Serial.println("setup end");
+  Serial.println("Setup end");
 }
 
 
 void loop() {
-  while (radio.available(&pipeNo)){
+  while (radio.available(&pipeNo)) {
     recieve_package_time = millis();
     radio.read(&p, sizeof(payload_t));
+
+    if (p.command == 0) {
+      Serial.println("received junk package");
+      continue;
+    }
+    Serial.println("received ok package");
 
     // steering
     uint16_t steering_servo_value = map(p.stick2_x, 0, 1023, LEFT, RIGTH);  // map 0 - 1023 to servo timing
@@ -253,7 +267,7 @@ void loop() {
     Serial.println("Reset state");
 
     set_engine(BRAKE, 0);  // brake by engine
-    set_steering(ZERO);  // set steering to center point
+//    set_steering(ZERO);  // set steering to center point
     delay(p.delay_ms);  // wait some time...
   }
 }

@@ -20,7 +20,7 @@
 
 // Payload datastructure
 struct payload_t {
-  uint8_t command;  // current controller command (none and active for now)
+  uint8_t command;  // current controller command (none or active for now)
 
   // stick1 data
   uint16_t stick1_x;
@@ -72,25 +72,25 @@ stick_settings_t stick1 = {
   .x_middle = 512, 
   .x_curve_a = 0,
   
-  .y_middle = 512,
-  .y_curve_a = 0,
+  .y_middle = 488,
+  .y_curve_a = .5,
 
-  .x_axis_pin = 0,
-  .y_axis_pin = 2,
-  .btn_pin = 3
+  .x_axis_pin = -1,
+  .y_axis_pin = 0,
+  .btn_pin = 2
 };
 
 
 stick_settings_t stick2 = {
-  .x_middle = 512, 
-  .x_curve_a = 0,
+  .x_middle = 502, 
+  .x_curve_a = .65,
   
   .y_middle = 512, 
   .y_curve_a = 0,
 
   .x_axis_pin = 1,
-  .y_axis_pin = 3,
-  .btn_pin = 4
+  .y_axis_pin = -1,
+  .btn_pin = -1
 };
 
 
@@ -120,8 +120,13 @@ void init_stick(stick_settings_t stick) {
 StickResponse read_stick(stick_settings_t stick) {
   StickResponse r;
 
-  uint16_t x_value = stick.x_axis_pin != -1 ? analogRead(stick.x_axis_pin) : 512;
-  uint16_t y_value = stick.y_axis_pin != -1 ? analogRead(stick.y_axis_pin) : 512;
+  // Values by default
+  r.x_value = 512;
+  r.y_value = 512;
+  r.engaged = false;
+
+  uint16_t x_value = stick.x_axis_pin != -1 ? analogRead(stick.x_axis_pin) : 0;
+  uint16_t y_value = stick.y_axis_pin != -1 ? analogRead(stick.y_axis_pin) : 0;
   r.pressed = stick.btn_pin != -1 ? digitalRead(stick.btn_pin) == LOW : false;
 
   if (x_value > (stick.x_middle + 1)) {
